@@ -16,7 +16,12 @@ st.title('Excel Header Formatter')
 st.write('Upload one or more Excel files to convert headers to snake case format')
 
 # File uploader for multiple files
-uploaded_files = st.file_uploader('Choose Excel files', type=['xlsx', 'xls'], accept_multiple_files=True)
+uploaded_files = st.file_uploader(
+    'Choose Excel files', 
+    type=['xlsx', 'xls'], 
+    accept_multiple_files=True,
+    key='excel_files'  # Added unique key
+)
 
 # Add timezone selector
 timezone_options = pytz.all_timezones
