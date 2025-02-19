@@ -11,10 +11,7 @@ def convert_to_snake_case(text):
     # Replace spaces with underscores and convert to lowercase
     return re.sub(r'\s+', '_', text.strip().lower())
 
-def replace_empty_fields(df):
-    df = df.replace(r'^\s*$', "NULL", regex=True)
-    df = df.fillna("NULL")
-    return df
+# Remove the replace_empty_fields function as we want to keep empty fields
 
 def format_timestamp_columns(df, source_timezone):
     timestamp_columns = [
@@ -22,10 +19,19 @@ def format_timestamp_columns(df, source_timezone):
         'order_paid_time', 'order_complete_time'
     ]
     
+    # PostgreSQL's earliest possible date
+    postgres_min_date = '4713-01-01 00:00:00'
+    
     for column in df.columns:
         if column in timestamp_columns:
             try:
+                # Convert to datetime, keeping NaT for empty values
                 df[column] = pd.to_datetime(df[column], errors='coerce')
+                
+                # Replace NaT with PostgreSQL minimum date
+                df[column] = df[column].fillna(pd.to_datetime(postgres_min_date))
+                
+                # Format with timezone
                 df[column] = df[column].dt.strftime('%Y-%m-%d %H:%M:%S%z')
             except Exception as e:
                 st.warning(f"Could not convert column '{column}' to timestamp format: {str(e)}")
@@ -39,8 +45,6 @@ def process_excel_file(uploaded_file, convert_headers=True, timezone=None):
         df.columns = [convert_to_snake_case(col) for col in df.columns]
     
     df = format_timestamp_columns(df, timezone)
-    df = replace_empty_fields(df)
-    
     return df
 
 def get_table_stats(df):
