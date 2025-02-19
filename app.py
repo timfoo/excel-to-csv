@@ -42,35 +42,38 @@ def process_excel_file(uploaded_file, convert_headers=True):
 
 # Set up the Streamlit page
 st.title('Excel Header Formatter')
-st.write('Upload an Excel file to convert headers to snake case format')
+st.write('Upload one or more Excel files to convert headers to snake case format')
 
-# File uploader
-uploaded_file = st.file_uploader('Choose an Excel file', type=['xlsx', 'xls'])
+# File uploader for multiple files
+uploaded_files = st.file_uploader('Choose Excel files', type=['xlsx', 'xls'], accept_multiple_files=True)
 
 # Add checkbox for snake case conversion
 convert_to_snake = st.checkbox('Convert headers to snake case', value=True)
 
-if uploaded_file is not None:
+if uploaded_files:
     try:
         # Add button to trigger conversion
-        if st.button('Process File'):
-            # Process the file
-            df = process_excel_file(uploaded_file, convert_headers=convert_to_snake)
-            
-            # Display the processed dataframe
-            st.write('Processed Data Preview:')
-            st.dataframe(df.head())
-            
-            # Convert to CSV and offer download
-            csv = df.to_csv(index=False)
-            original_filename = uploaded_file.name
-            output_filename = original_filename.rsplit('.', 1)[0] + '.csv'
-            st.download_button(
-                label='Download CSV',
-                data=csv,
-                file_name=output_filename,
-                mime='text/csv'
-            )
-            
+        if st.button('Process Files'):
+            for uploaded_file in uploaded_files:
+                st.write(f'Processing: {uploaded_file.name}')
+                
+                # Process the file
+                df = process_excel_file(uploaded_file, convert_headers=convert_to_snake)
+                
+                # Display the processed dataframe
+                st.write('Processed Data Preview:')
+                st.dataframe(df.head())
+                
+                # Convert to CSV and offer download
+                csv = df.to_csv(index=False)
+                output_filename = uploaded_file.name.rsplit('.', 1)[0] + '.csv'
+                st.download_button(
+                    label=f'Download {output_filename}',
+                    data=csv,
+                    file_name=output_filename,
+                    mime='text/csv'
+                )
+                st.divider()
+                
     except Exception as e:
-        st.error(f'Error processing file: {str(e)}')
+        st.error(f'Error processing files: {str(e)}')
