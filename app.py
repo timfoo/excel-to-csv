@@ -137,8 +137,16 @@ if uploaded_files:
             st.table(stats_df)
             
             # Handle consolidated output
+            # Add before the CSV export
+            def clean_empty_strings(df):
+                # Replace empty strings with NaN (which will become NULL in PostgreSQL)
+                df = df.replace(r'^\s*$', np.nan, regex=True)
+                return df
+            
+            # Modify the CSV export part (around line 180)
             if consolidate_files and st.session_state.processed_files:
                 combined_df = pd.concat(st.session_state.processed_files.values(), ignore_index=True)
+                combined_df = clean_empty_strings(combined_df)  # Add this line
                 validate_consolidation(st.session_state.file_stats, combined_df)
                 
                 total_individual_rows = sum(stats['row_count'] for stats in st.session_state.file_stats.values())
