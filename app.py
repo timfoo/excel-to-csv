@@ -63,6 +63,7 @@ uploaded_files = st.file_uploader('Choose Excel files', type=['xlsx', 'xls'], ac
 
 # Add checkbox for snake case conversion
 convert_to_snake = st.checkbox('Convert headers to snake case', value=True)
+consolidate_files = st.checkbox('Consolidate all files into one (requires identical headers)', value=True)
 
 # Initialize session state for processed files
 if 'processed_files' not in st.session_state:
@@ -70,39 +71,65 @@ if 'processed_files' not in st.session_state:
 
 if uploaded_files:
     try:
-        # Add button to trigger conversion
         if st.button('Process Files'):
-            st.session_state.processed_files.clear()  # Clear previous results
+            st.session_state.processed_files.clear()
+            
+            # Store headers for validation
+            headers_set = set()
+            
             for uploaded_file in uploaded_files:
                 st.write(f'Processing: {uploaded_file.name}')
-                
-                # Process the file
                 df = process_excel_file(
                     uploaded_file, 
                     convert_headers=convert_to_snake,
                     timezone=selected_timezone
                 )
                 
-                # Store processed data in session state
+                # Validate headers if consolidation is requested
+                if consolidate_files:
+                    current_headers = tuple(df.columns)
+                    if not headers_set:
+                        headers_set.add(current_headers)
+                    elif current_headers not in headers_set:
+                        raise ValueError(f"Headers in {uploaded_file.name} do not match other files. Consolidation requires identical headers.")
+                
                 st.session_state.processed_files[uploaded_file.name] = df
+            
+            # Handle consolidated output
+            if consolidate_files and st.session_state.processed_files:
+                combined_df = pd.concat(st.session_state.processed_files.values(), ignore_index=True)
+                st.write('Consolidated Data Preview:')
+                st.dataframe(combined_df.head())
                 
-        # Display results if available
-        if st.session_state.processed_files:
-            for filename, df in st.session_state.processed_files.items():
-                st.write(f'Processed Data Preview for {filename}:')
-                st.dataframe(df.head())
-                
-                # Convert to CSV and offer download
-                csv = df.to_csv(index=False)
-                output_filename = filename.rsplit('.', 1)[0] + '.csv'
+                # Offer consolidated download
+                csv = combined_df.to_csv(index=False)
                 st.download_button(
-                    label=f'Download {output_filename}',
+                    label='Download Consolidated CSV',
                     data=csv,
-                    file_name=output_filename,
+                    file_name='consolidated_output.csv',
                     mime='text/csv',
-                    key=f'download_{filename}'  # Unique key for each button
+                    key='download_consolidated'
                 )
                 st.divider()
+            
+            # Display individual files
+            if not consolidate_files:
+                for filename, df in st.session_state.processed_files.items():
+                    st.write(f'Processed Data Preview for {filename}:')
+                    st.dataframe(df.head())
+                    
+                    csv = df.to_csv(index=False)
+                    output_filename = filename.rsplit('.', 1)[0] + '.csv'
+                    st.download_button(
+                        label=f'Download {output_filename}',
+                        data=csv,
+                        file_name=output_filename,
+                        mime='text/csv',
+                        key=f'download_{filename}'
+                    )
+                    st.divider()
                 
+    except ValueError as ve:
+        st.error(str(ve))
     except Exception as e:
         st.error(f'Error processing files: {str(e)}')
