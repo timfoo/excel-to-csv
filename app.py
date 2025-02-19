@@ -11,20 +11,22 @@ def convert_to_snake_case(text):
     return re.sub(r'\s+', '_', text.strip().lower())
 
 def format_timestamp_columns(df):
+    timestamp_pattern = r'^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}$'
+    
     for column in df.columns:
-        # Check if column contains datetime-like values
-        if df[column].dtype == 'datetime64[ns]' or (
-            df[column].dtype == 'object' and 
-            df[column].notna().any() and 
-            isinstance(df[column].iloc[df[column].first_valid_index()], (str, datetime))
-        ):
-            try:
-                # Convert to datetime and handle timezone
-                df[column] = pd.to_datetime(df[column], utc=True)
-                # Format as ISO 8601 string compatible with timestamptz
-                df[column] = df[column].dt.strftime('%Y-%m-%d %H:%M:%S%z')
-            except Exception as e:
-                st.warning(f"Could not convert column '{column}' to timestamp format: {str(e)}")
+        if df[column].dtype == 'object':  # Only check string columns
+            # Replace dash-only values with NaN
+            df[column] = df[column].replace('^-+$', np.nan, regex=True)
+            
+            sample_values = df[column].dropna().head()
+            if any(isinstance(val, str) and re.match(timestamp_pattern, val.strip()) for val in sample_values):
+                try:
+                    # Convert to datetime and handle timezone
+                    df[column] = pd.to_datetime(df[column], utc=True)
+                    # Format as ISO 8601 string compatible with timestamptz
+                    df[column] = df[column].dt.strftime('%Y-%m-%d %H:%M:%S%z')
+                except Exception as e:
+                    st.warning(f"Could not convert column '{column}' to timestamp format: {str(e)}")
     return df
 
 def process_excel_file(uploaded_file, convert_headers=True):
