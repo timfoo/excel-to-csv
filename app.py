@@ -1,12 +1,31 @@
 import streamlit as st
 import pandas as pd
 import re
+from datetime import datetime
+import numpy as np
 
 def convert_to_snake_case(text):
     # Remove any special characters except alphanumeric and spaces
     text = re.sub(r'[^\w\s]', '', text)
     # Replace spaces with underscores and convert to lowercase
     return re.sub(r'\s+', '_', text.strip().lower())
+
+def format_timestamp_columns(df):
+    for column in df.columns:
+        # Check if column contains datetime-like values
+        if df[column].dtype == 'datetime64[ns]' or (
+            df[column].dtype == 'object' and 
+            df[column].notna().any() and 
+            isinstance(df[column].iloc[df[column].first_valid_index()], (str, datetime))
+        ):
+            try:
+                # Convert to datetime and handle timezone
+                df[column] = pd.to_datetime(df[column], utc=True)
+                # Format as ISO 8601 string compatible with timestamptz
+                df[column] = df[column].dt.strftime('%Y-%m-%d %H:%M:%S%z')
+            except Exception as e:
+                st.warning(f"Could not convert column '{column}' to timestamp format: {str(e)}")
+    return df
 
 def process_excel_file(uploaded_file, convert_headers=True):
     # Read the Excel file
@@ -15,6 +34,9 @@ def process_excel_file(uploaded_file, convert_headers=True):
     # Convert headers to snake case if option is selected
     if convert_headers:
         df.columns = [convert_to_snake_case(col) for col in df.columns]
+    
+    # Format timestamp columns
+    df = format_timestamp_columns(df)
     
     return df
 
