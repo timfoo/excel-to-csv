@@ -31,18 +31,19 @@ def format_timestamp_columns(df, source_timezone):
     
     for column in df.columns:
         if df[column].dtype == 'object':
-            df[column] = df[column].replace('^-+$', np.nan, regex=True)
+            # Replace empty strings, dashes, and whitespace-only strings with NaN
+            df[column] = df[column].replace([r'^\s*$', r'^-+$', r''], np.nan, regex=True)
             
             sample_values = df[column].dropna().head()
             if any(isinstance(val, str) and re.match(timestamp_pattern, val.strip()) for val in sample_values):
                 try:
                     # Convert to datetime with source timezone
-                    df[column] = pd.to_datetime(df[column])
-                    df[column] = df[column].apply(lambda x: x.tz_localize(source_timezone) if pd.notnull(x) else x)
+                    df[column] = pd.to_datetime(df[column], errors='coerce')  # 'coerce' will convert invalid dates to NaT
+                    df[column] = df[column].apply(lambda x: x.tz_localize(source_timezone) if pd.notnull(x) else None)
                     # Convert to UTC
-                    df[column] = df[column].apply(lambda x: x.tz_convert('UTC') if pd.notnull(x) else x)
-                    # Format as ISO 8601
-                    df[column] = df[column].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S%z') if pd.notnull(x) else x)
+                    df[column] = df[column].apply(lambda x: x.tz_convert('UTC') if pd.notnull(x) else None)
+                    # Format as ISO 8601, ensuring None values become NULL
+                    df[column] = df[column].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S%z') if pd.notnull(x) else None)
                 except Exception as e:
                     st.warning(f"Could not convert column '{column}' to timestamp format: {str(e)}")
     return df
