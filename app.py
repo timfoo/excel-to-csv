@@ -64,32 +64,43 @@ uploaded_files = st.file_uploader('Choose Excel files', type=['xlsx', 'xls'], ac
 # Add checkbox for snake case conversion
 convert_to_snake = st.checkbox('Convert headers to snake case', value=True)
 
+# Initialize session state for processed files
+if 'processed_files' not in st.session_state:
+    st.session_state.processed_files = {}
+
 if uploaded_files:
     try:
         # Add button to trigger conversion
         if st.button('Process Files'):
+            st.session_state.processed_files.clear()  # Clear previous results
             for uploaded_file in uploaded_files:
                 st.write(f'Processing: {uploaded_file.name}')
                 
                 # Process the file
                 df = process_excel_file(
-                uploaded_file, 
-                convert_headers=convert_to_snake,
-                timezone=selected_timezone
-            )
+                    uploaded_file, 
+                    convert_headers=convert_to_snake,
+                    timezone=selected_timezone
+                )
                 
-                # Display the processed dataframe
-                st.write('Processed Data Preview:')
+                # Store processed data in session state
+                st.session_state.processed_files[uploaded_file.name] = df
+                
+        # Display results if available
+        if st.session_state.processed_files:
+            for filename, df in st.session_state.processed_files.items():
+                st.write(f'Processed Data Preview for {filename}:')
                 st.dataframe(df.head())
                 
                 # Convert to CSV and offer download
                 csv = df.to_csv(index=False)
-                output_filename = uploaded_file.name.rsplit('.', 1)[0] + '.csv'
+                output_filename = filename.rsplit('.', 1)[0] + '.csv'
                 st.download_button(
                     label=f'Download {output_filename}',
                     data=csv,
                     file_name=output_filename,
-                    mime='text/csv'
+                    mime='text/csv',
+                    key=f'download_{filename}'  # Unique key for each button
                 )
                 st.divider()
                 
