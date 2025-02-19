@@ -19,8 +19,8 @@ def format_timestamp_columns(df, source_timezone):
         'order_paid_time', 'order_complete_time'
     ]
     
-    # PostgreSQL's earliest possible date
-    postgres_min_date = '4713-01-01 00:00:00'
+    # Use 1900 as the default date
+    default_date = '1900-01-01 00:00:00'
     
     for column in df.columns:
         if column in timestamp_columns:
@@ -28,8 +28,8 @@ def format_timestamp_columns(df, source_timezone):
                 # Convert to datetime, keeping NaT for empty values
                 df[column] = pd.to_datetime(df[column], errors='coerce')
                 
-                # Replace NaT with PostgreSQL minimum date
-                df[column] = df[column].fillna(pd.to_datetime(postgres_min_date))
+                # Replace NaT with 1900 date
+                df[column] = df[column].fillna(pd.to_datetime(default_date))
                 
                 # Format with timezone
                 df[column] = df[column].dt.strftime('%Y-%m-%d %H:%M:%S%z')
