@@ -76,13 +76,6 @@ def process_excel_file(uploaded_file, convert_headers=True, timezone=None):
     
     return df
 
-# File uploader for multiple files
-uploaded_files = st.file_uploader('Choose Excel files', type=['xlsx', 'xls'], accept_multiple_files=True)
-
-# Add checkbox for snake case conversion
-convert_to_snake = st.checkbox('Convert headers to snake case', value=True)
-consolidate_files = st.checkbox('Consolidate all files into one (requires identical headers)', value=True)
-
 # Initialize session state for processed files
 if 'processed_files' not in st.session_state:
     st.session_state.processed_files = {}
