@@ -91,8 +91,11 @@ if uploaded_files:
     try:
         if st.button('Process Files'):
             st.session_state.processed_files.clear()
-            st.session_state.file_stats = {}  # Store statistics for each file
+            st.session_state.file_stats = {}
             headers_set = set()
+            
+            # Create table data
+            table_data = []
             
             for uploaded_file in uploaded_files:
                 st.write(f'Processing: {uploaded_file.name}')
@@ -102,12 +105,13 @@ if uploaded_files:
                     timezone=selected_timezone
                 )
                 
-                # Simplified statistics display
                 stats = get_table_stats(df)
                 st.session_state.file_stats[uploaded_file.name] = stats
-                st.write(f"File Statistics for {uploaded_file.name}:")
-                st.write(f"- Rows: {stats['row_count']}")
-                st.write(f"- Columns: {stats['column_count']}")
+                table_data.append({
+                    'File Name': uploaded_file.name,
+                    'Rows': stats['row_count'],
+                    'Columns': stats['column_count']
+                })
 
                 # Validate headers if consolidation is requested
                 if consolidate_files:
@@ -119,20 +123,28 @@ if uploaded_files:
                 
                 st.session_state.processed_files[uploaded_file.name] = df
             
+            # Display statistics table
+            st.write("File Statistics:")
+            stats_df = pd.DataFrame(table_data)
+            st.table(stats_df)
+            
             # Handle consolidated output
             if consolidate_files and st.session_state.processed_files:
                 combined_df = pd.concat(st.session_state.processed_files.values(), ignore_index=True)
-                
-                # Validate consolidation
                 validate_consolidation(st.session_state.file_stats, combined_df)
                 
-                # Simplified consolidated statistics
-                st.write('Consolidated Data Statistics:')
+                total_individual_rows = sum(stats['row_count'] for stats in st.session_state.file_stats.values())
                 consolidated_stats = get_table_stats(combined_df)
-                st.write(f"- Total Rows: {consolidated_stats['row_count']}")
-                st.write(f"- Columns: {consolidated_stats['column_count']}")
                 
-                if consolidated_stats['row_count'] == sum(stats['row_count'] for stats in st.session_state.file_stats.values()):
+                st.write("Consolidated File Statistics:")
+                consolidated_data = pd.DataFrame([{
+                    'File Name': 'CONSOLIDATED FILE',
+                    'Rows': f"{consolidated_stats['row_count']} / {total_individual_rows}",
+                    'Columns': consolidated_stats['column_count']
+                }])
+                st.table(consolidated_data)
+                
+                if consolidated_stats['row_count'] == total_individual_rows:
                     st.success("✅ Row count validation successful")
                 else:
                     st.error("❌ Row count validation failed")
