@@ -69,12 +69,35 @@ consolidate_files = st.checkbox('Consolidate all files into one (requires identi
 if 'processed_files' not in st.session_state:
     st.session_state.processed_files = {}
 
+def get_table_stats(df):
+    stats = {
+        'row_count': len(df),
+        'column_count': len(df.columns),
+        'headers': list(df.columns),
+        'null_counts': df.isnull().sum().to_dict(),
+        'unique_counts': {col: df[col].nunique() for col in df.columns}
+    }
+    return stats
+
+def validate_consolidation(individual_stats, consolidated_df):
+    total_rows = sum(stats['row_count'] for stats in individual_stats.values())
+    if total_rows != len(consolidated_df):
+        raise ValueError(f"Row count mismatch. Individual files total: {total_rows}, Consolidated: {len(consolidated_df)}")
+    
+    # Validate headers
+    first_file_headers = individual_stats[list(individual_stats.keys())[0]]['headers']
+    if not all(stats['headers'] == first_file_headers for stats in individual_stats.values()):
+        raise ValueError("Header mismatch detected in consolidation validation")
+    
+    # Validate column counts
+    if not all(stats['column_count'] == len(consolidated_df.columns) for stats in individual_stats.values()):
+        raise ValueError("Column count mismatch detected in consolidation validation")
+
 if uploaded_files:
     try:
         if st.button('Process Files'):
             st.session_state.processed_files.clear()
-            
-            # Store headers for validation
+            st.session_state.file_stats = {}  # Store statistics for each file
             headers_set = set()
             
             for uploaded_file in uploaded_files:
@@ -85,19 +108,44 @@ if uploaded_files:
                     timezone=selected_timezone
                 )
                 
+                # Collect and display statistics
+                stats = get_table_stats(df)
+                st.session_state.file_stats[uploaded_file.name] = stats
+                
+                st.write(f"File Statistics for {uploaded_file.name}:")
+                st.write(f"- Rows: {stats['row_count']}")
+                st.write(f"- Columns: {stats['column_count']}")
+                st.write("- Null counts per column:")
+                st.json(stats['null_counts'])
+                st.write("- Unique values per column:")
+                st.json(stats['unique_counts'])
+                
                 # Validate headers if consolidation is requested
                 if consolidate_files:
                     current_headers = tuple(df.columns)
                     if not headers_set:
                         headers_set.add(current_headers)
                     elif current_headers not in headers_set:
-                        raise ValueError(f"Headers in {uploaded_file.name} do not match other files. Consolidation requires identical headers.")
+                        raise ValueError(f"Headers in {uploaded_file.name} do not match other files.")
                 
                 st.session_state.processed_files[uploaded_file.name] = df
             
             # Handle consolidated output
             if consolidate_files and st.session_state.processed_files:
                 combined_df = pd.concat(st.session_state.processed_files.values(), ignore_index=True)
+                
+                # Validate consolidation
+                validate_consolidation(st.session_state.file_stats, combined_df)
+                
+                st.write('Consolidated Data Statistics:')
+                consolidated_stats = get_table_stats(combined_df)
+                st.write(f"- Total Rows: {consolidated_stats['row_count']}")
+                st.write(f"- Columns: {consolidated_stats['column_count']}")
+                st.write("- Null counts in consolidated file:")
+                st.json(consolidated_stats['null_counts'])
+                st.write("- Unique values in consolidated file:")
+                st.json(consolidated_stats['unique_counts'])
+                
                 st.write('Consolidated Data Preview:')
                 st.dataframe(combined_df.head())
                 
