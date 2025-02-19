@@ -41,28 +41,25 @@ consolidate_files = st.checkbox('Consolidate all files into one (requires identi
 def format_timestamp_columns(df, source_timezone):
     timestamp_pattern = r'^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}$'
     
+    # List of timestamp columns in your data
+    timestamp_columns = [
+        'estimated_ship_out_date', 'ship_time', 'order_creation_date',
+        'order_paid_time', 'order_complete_time'
+    ]
+    
     for column in df.columns:
-        if df[column].dtype == 'object':
-            # Replace empty strings, dashes, and whitespace-only strings with NaN
+        if column in timestamp_columns:
+            # Replace empty strings with NaN
             df[column] = df[column].replace([r'^\s*$', r'^-+$', r''], np.nan, regex=True)
             
-            sample_values = df[column].dropna().head()
-            if any(isinstance(val, str) and (re.match(timestamp_pattern, val.strip()) or '+0000' in val) for val in sample_values):
-                try:
-                    # If timestamps already have timezone info, parse them directly
-                    if any('+0000' in str(val) for val in sample_values if pd.notnull(val)):
-                        df[column] = pd.to_datetime(df[column], format='%Y-%m-%d %H:%M:%S%z', errors='coerce')
-                    else:
-                        # Convert to datetime with source timezone
-                        df[column] = pd.to_datetime(df[column], errors='coerce')
-                        df[column] = df[column].apply(lambda x: x.tz_localize(source_timezone) if pd.notnull(x) else None)
-                        # Convert to UTC
-                        df[column] = df[column].apply(lambda x: x.tz_convert('UTC') if pd.notnull(x) else None)
-                    
-                    # Format as ISO 8601 without 'Z' suffix
-                    df[column] = df[column].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S%z') if pd.notnull(x) else None)
-                except Exception as e:
-                    st.warning(f"Could not convert column '{column}' to timestamp format: {str(e)}")
+            try:
+                # Convert to datetime and format for PostgreSQL
+                df[column] = pd.to_datetime(df[column], errors='coerce')
+                # Format as ISO 8601 with space instead of T
+                df[column] = df[column].dt.strftime('%Y-%m-%d %H:%M:%S%z')
+            except Exception as e:
+                st.warning(f"Could not convert column '{column}' to timestamp format: {str(e)}")
+    
     return df
 
 # Update process_excel_file function
