@@ -15,6 +15,9 @@ def convert_to_snake_case(text):
 st.title('Excel Header Formatter')
 st.write('Upload one or more Excel files to convert headers to snake case format')
 
+# File uploader for multiple files
+uploaded_files = st.file_uploader('Choose Excel files', type=['xlsx', 'xls'], accept_multiple_files=True)
+
 # Add timezone selector
 timezone_options = pytz.all_timezones
 default_tz_index = timezone_options.index('Asia/Singapore')  # UTC+8
@@ -24,6 +27,10 @@ selected_timezone = st.selectbox(
     index=default_tz_index,
     help='Choose the timezone that matches your source data'
 )
+
+# Add checkbox for snake case conversion
+convert_to_snake = st.checkbox('Convert headers to snake case', value=True)
+consolidate_files = st.checkbox('Consolidate all files into one (requires identical headers)', value=True)
 
 # Update format_timestamp_columns function
 def format_timestamp_columns(df, source_timezone):
