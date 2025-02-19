@@ -11,37 +11,12 @@ def convert_to_snake_case(text):
     # Replace spaces with underscores and convert to lowercase
     return re.sub(r'\s+', '_', text.strip().lower())
 
-# Set up the Streamlit page
-st.title('Excel Header Formatter')
-st.write('Upload one or more Excel files to convert headers to snake case format')
+def replace_empty_fields(df):
+    df = df.replace(r'^\s*$', "NULL", regex=True)
+    df = df.fillna("NULL")
+    return df
 
-# File uploader for multiple files
-uploaded_files = st.file_uploader(
-    'Choose Excel files', 
-    type=['xlsx', 'xls'], 
-    accept_multiple_files=True,
-    key='excel_files'  # Added unique key
-)
-
-# Add timezone selector
-timezone_options = pytz.all_timezones
-default_tz_index = timezone_options.index('Asia/Singapore')  # UTC+8
-selected_timezone = st.selectbox(
-    'Select source data timezone',
-    options=timezone_options,
-    index=default_tz_index,
-    help='Choose the timezone that matches your source data'
-)
-
-# Add checkbox for snake case conversion
-convert_to_snake = st.checkbox('Convert headers to snake case', value=True)
-consolidate_files = st.checkbox('Consolidate all files into one (requires identical headers)', value=True)
-
-# Update format_timestamp_columns function
 def format_timestamp_columns(df, source_timezone):
-    timestamp_pattern = r'^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}$'
-    
-    # List of timestamp columns in your data
     timestamp_columns = [
         'estimated_ship_out_date', 'ship_time', 'order_creation_date',
         'order_paid_time', 'order_complete_time'
@@ -49,20 +24,14 @@ def format_timestamp_columns(df, source_timezone):
     
     for column in df.columns:
         if column in timestamp_columns:
-            # Replace empty strings with NaN
-            df[column] = df[column].replace([r'^\s*$', r'^-+$', r''], np.nan, regex=True)
-            
             try:
-                # Convert to datetime and format for PostgreSQL
                 df[column] = pd.to_datetime(df[column], errors='coerce')
-                # Format as ISO 8601 with space instead of T
                 df[column] = df[column].dt.strftime('%Y-%m-%d %H:%M:%S%z')
             except Exception as e:
                 st.warning(f"Could not convert column '{column}' to timestamp format: {str(e)}")
     
     return df
 
-# Update process_excel_file function
 def process_excel_file(uploaded_file, convert_headers=True, timezone=None):
     df = pd.read_excel(uploaded_file)
     
@@ -70,30 +39,51 @@ def process_excel_file(uploaded_file, convert_headers=True, timezone=None):
         df.columns = [convert_to_snake_case(col) for col in df.columns]
     
     df = format_timestamp_columns(df, timezone)
+    df = replace_empty_fields(df)
     
     return df
 
-# Initialize session state for processed files
-if 'processed_files' not in st.session_state:
-    st.session_state.processed_files = {}
-
 def get_table_stats(df):
-    stats = {
+    return {
         'row_count': len(df),
         'column_count': len(df.columns),
         'headers': list(df.columns)
     }
-    return stats
 
 def validate_consolidation(individual_stats, consolidated_df):
     total_rows = sum(stats['row_count'] for stats in individual_stats.values())
     if total_rows != len(consolidated_df):
         raise ValueError(f"Row count mismatch. Individual files total: {total_rows}, Consolidated: {len(consolidated_df)}")
     
-    # Validate headers
     first_file_headers = individual_stats[list(individual_stats.keys())[0]]['headers']
     if not all(stats['headers'] == first_file_headers for stats in individual_stats.values()):
         raise ValueError("Header mismatch detected in consolidation validation")
+
+# Set up the Streamlit page
+st.title('Excel Header Formatter')
+st.write('Upload one or more Excel files to convert headers to snake case format')
+
+uploaded_files = st.file_uploader(
+    'Choose Excel files', 
+    type=['xlsx', 'xls'], 
+    accept_multiple_files=True,
+    key='excel_files'
+)
+
+timezone_options = pytz.all_timezones
+default_tz_index = timezone_options.index('Asia/Singapore')
+selected_timezone = st.selectbox(
+    'Select source data timezone',
+    options=timezone_options,
+    index=default_tz_index,
+    help='Choose the timezone that matches your source data'
+)
+
+convert_to_snake = st.checkbox('Convert headers to snake case', value=True)
+consolidate_files = st.checkbox('Consolidate all files into one (requires identical headers)', value=True)
+
+if 'processed_files' not in st.session_state:
+    st.session_state.processed_files = {}
 
 if uploaded_files:
     try:
@@ -101,8 +91,6 @@ if uploaded_files:
             st.session_state.processed_files.clear()
             st.session_state.file_stats = {}
             headers_set = set()
-            
-            # Create table data
             table_data = []
             
             for uploaded_file in uploaded_files:
@@ -121,7 +109,6 @@ if uploaded_files:
                     'Columns': stats['column_count']
                 })
 
-                # Validate headers if consolidation is requested
                 if consolidate_files:
                     current_headers = tuple(df.columns)
                     if not headers_set:
@@ -131,22 +118,12 @@ if uploaded_files:
                 
                 st.session_state.processed_files[uploaded_file.name] = df
             
-            # Display statistics table
             st.write("File Statistics:")
             stats_df = pd.DataFrame(table_data)
             st.table(stats_df)
             
-            # Handle consolidated output
-            # Add before the CSV export
-            def clean_empty_strings(df):
-                # Replace empty strings with NaN (which will become NULL in PostgreSQL)
-                df = df.replace(r'^\s*$', np.nan, regex=True)
-                return df
-            
-            # Modify the CSV export part (around line 180)
             if consolidate_files and st.session_state.processed_files:
                 combined_df = pd.concat(st.session_state.processed_files.values(), ignore_index=True)
-                combined_df = clean_empty_strings(combined_df)  # Add this line
                 validate_consolidation(st.session_state.file_stats, combined_df)
                 
                 total_individual_rows = sum(stats['row_count'] for stats in st.session_state.file_stats.values())
@@ -168,7 +145,6 @@ if uploaded_files:
                 st.write('Consolidated Data Preview:')
                 st.dataframe(combined_df.head())
                 
-                # Offer consolidated download
                 csv = combined_df.to_csv(index=False)
                 st.download_button(
                     label='Download Consolidated CSV',
@@ -179,7 +155,6 @@ if uploaded_files:
                 )
                 st.divider()
             
-            # Display individual files
             if not consolidate_files:
                 for filename, df in st.session_state.processed_files.items():
                     st.write(f'Processed Data Preview for {filename}:')
