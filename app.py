@@ -73,9 +73,7 @@ def get_table_stats(df):
     stats = {
         'row_count': len(df),
         'column_count': len(df.columns),
-        'headers': list(df.columns),
-        'null_counts': df.isnull().sum().to_dict(),
-        'unique_counts': {col: df[col].nunique() for col in df.columns}
+        'headers': list(df.columns)
     }
     return stats
 
@@ -88,10 +86,6 @@ def validate_consolidation(individual_stats, consolidated_df):
     first_file_headers = individual_stats[list(individual_stats.keys())[0]]['headers']
     if not all(stats['headers'] == first_file_headers for stats in individual_stats.values()):
         raise ValueError("Header mismatch detected in consolidation validation")
-    
-    # Validate column counts
-    if not all(stats['column_count'] == len(consolidated_df.columns) for stats in individual_stats.values()):
-        raise ValueError("Column count mismatch detected in consolidation validation")
 
 if uploaded_files:
     try:
@@ -108,18 +102,13 @@ if uploaded_files:
                     timezone=selected_timezone
                 )
                 
-                # Collect and display statistics
+                # Simplified statistics display
                 stats = get_table_stats(df)
                 st.session_state.file_stats[uploaded_file.name] = stats
-                
                 st.write(f"File Statistics for {uploaded_file.name}:")
                 st.write(f"- Rows: {stats['row_count']}")
                 st.write(f"- Columns: {stats['column_count']}")
-                st.write("- Null counts per column:")
-                st.json(stats['null_counts'])
-                st.write("- Unique values per column:")
-                st.json(stats['unique_counts'])
-                
+
                 # Validate headers if consolidation is requested
                 if consolidate_files:
                     current_headers = tuple(df.columns)
@@ -137,15 +126,17 @@ if uploaded_files:
                 # Validate consolidation
                 validate_consolidation(st.session_state.file_stats, combined_df)
                 
+                # Simplified consolidated statistics
                 st.write('Consolidated Data Statistics:')
                 consolidated_stats = get_table_stats(combined_df)
                 st.write(f"- Total Rows: {consolidated_stats['row_count']}")
                 st.write(f"- Columns: {consolidated_stats['column_count']}")
-                st.write("- Null counts in consolidated file:")
-                st.json(consolidated_stats['null_counts'])
-                st.write("- Unique values in consolidated file:")
-                st.json(consolidated_stats['unique_counts'])
                 
+                if consolidated_stats['row_count'] == sum(stats['row_count'] for stats in st.session_state.file_stats.values()):
+                    st.success("✅ Row count validation successful")
+                else:
+                    st.error("❌ Row count validation failed")
+
                 st.write('Consolidated Data Preview:')
                 st.dataframe(combined_df.head())
                 
