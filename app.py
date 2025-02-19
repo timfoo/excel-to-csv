@@ -35,22 +35,20 @@ def format_timestamp_columns(df, source_timezone):
             df[column] = df[column].replace([r'^\s*$', r'^-+$', r''], np.nan, regex=True)
             
             sample_values = df[column].dropna().head()
-            if any(isinstance(val, str) and re.match(timestamp_pattern, val.strip()) for val in sample_values):
+            if any(isinstance(val, str) and (re.match(timestamp_pattern, val.strip()) or '+0000' in val) for val in sample_values):
                 try:
-                    # Convert to datetime with source timezone
-                    df[column] = pd.to_datetime(df[column], errors='coerce')
-                    # Handle timezone conversion more carefully
-                    valid_dates = df[column].notna()
-                    if valid_dates.any():
-                        # Only process valid timestamps
-                        df.loc[valid_dates, column] = (
-                            df.loc[valid_dates, column]
-                            .dt.tz_localize(source_timezone)
-                            .dt.tz_convert('UTC')
-                            .dt.strftime('%Y-%m-%d %H:%M:%S%z')
-                        )
-                    # Ensure NULL values are properly handled
-                    df.loc[~valid_dates, column] = None
+                    # If timestamps already have timezone info, parse them directly
+                    if any('+0000' in str(val) for val in sample_values if pd.notnull(val)):
+                        df[column] = pd.to_datetime(df[column], format='%Y-%m-%d %H:%M:%S%z', errors='coerce')
+                    else:
+                        # Convert to datetime with source timezone
+                        df[column] = pd.to_datetime(df[column], errors='coerce')
+                        df[column] = df[column].apply(lambda x: x.tz_localize(source_timezone) if pd.notnull(x) else None)
+                        # Convert to UTC
+                        df[column] = df[column].apply(lambda x: x.tz_convert('UTC') if pd.notnull(x) else None)
+                    
+                    # Format as ISO 8601 without 'Z' suffix
+                    df[column] = df[column].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S%z') if pd.notnull(x) else None)
                 except Exception as e:
                     st.warning(f"Could not convert column '{column}' to timestamp format: {str(e)}")
     return df
